@@ -1,0 +1,3 @@
+## 2024-03-24 - Validate Skills Script Optimization
+**Learning:** The bash script `validate-skills.sh` iterates over many directories and relies heavily on external sub-processes (`awk`, `head`, `wc`, `tr`) per file to parse metadata. This incurs significant overhead from process forking (taking ~5s for 10 runs). Replacing these with a single `awk` process substitution block cuts execution time by ~3x.
+**Action:** When working on bash scripts in this repo (like `validate-skills.sh`), avoid calling multiple external utilities per file in loops. Prefer reading multiple values at once from a single external call (like a comprehensive `awk` pass) into bash variables.
