@@ -1,0 +1,3 @@
+## 2026-09-10 - Refactoring bash to avoid unnecessary subshells
+**Learning:** In bash, doing `basename`, `tr`, `head`, and especially `awk` inside loops is very expensive. Re-writing string manipulation natively in bash, and using single `awk` commands to combine multiple tasks, drastically improves script performance. Also note macOS's `wc -l` command pads output with spaces differently than linux. So removing spaces by parameter expansion is more reliable.
+**Action:** Always favor native bash string substitutions (like `${var%/}` or `${var//[[:space:]]/}`) over forks to tools like `basename` or `tr` when inside of loops. Use `read -r` over `head -n1`. Consolidate multiple external data processing invocations (`awk`, `grep`, `sed`) into single passes.
