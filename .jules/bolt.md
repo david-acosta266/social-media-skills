@@ -1,0 +1,3 @@
+## 2024-05-24 - Single Pass awk Optimization
+**Learning:** Parsing files like SKILL.md by repeatedly invoking `head`, `awk`, `tr`, and `wc` for each file inside a loop is extremely inefficient. A single-pass `awk` script combined with `IFS=$'\x1c' read -r` can drastically reduce the number of process creations, accelerating execution.
+**Action:** When a shell script processes multiple files in a loop, avoid spawning multiple external processes (e.g. `head`, `awk`, `grep`) per iteration. Consolidate logic into a single parser tool (like one `awk` command) per file, or purely built-in shell commands.

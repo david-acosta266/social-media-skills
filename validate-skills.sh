@@ -49,18 +49,43 @@ for skill_dir in "$SKILLS_DIR"/*/; do
     ok "folder name valid"
   fi
 
+  # ⚡ Bolt Optimization: Parse SKILL.md in a single pass to minimize process creations.
+  # This extracts the first line, name, description, and line count without spawning
+  # multiple subshells, head, awk, tr, and wc processes per skill.
+  IFS=$'\x1c' read -r first_line yaml_name desc_block line_count < <(awk '
+    BEGIN { name=""; desc=""; front_done=0; in_front=0; desc_multi=0; first_line="" }
+    NR==1 { first_line=$0 }
+    !front_done && /^---[ \t]*$/ {
+       if (!in_front) { in_front=1; next }
+       else { front_done=1; in_front=0; next }
+    }
+    in_front && /^name:[ \t]*/ {
+       name = $0; sub(/^name:[ \t]*/, "", name); gsub(/["\x27\r\n \t]/, "", name)
+    }
+    in_front && /^description:[ \t]*/ {
+       desc = $0; sub(/^description:[ \t]*/, "", desc);
+       if (desc ~ /^>/ || desc ~ /^\|/) { desc_multi=1; desc="" }
+       else { desc_multi=0 }
+       next
+    }
+    in_front && desc_multi {
+       if ($0 ~ /^[a-zA-Z_-]+:/) { desc_multi=0 }
+       else {
+         tmp=$0; sub(/^[ \t]+/, "", tmp); desc = desc tmp " "
+       }
+    }
+    END {
+       printf "%s\x1c%s\x1c%s\x1c%d\n", first_line, name, desc, NR
+    }
+  ' "$skill_md")
+
   # Frontmatter present
-  first_line="$(head -n1 "$skill_md")"
   if [[ "$first_line" != "---" ]]; then
     err "SKILL.md must start with YAML frontmatter (---)"
     continue
   fi
 
-  # Extract frontmatter (between the first two --- delimiters)
-  frontmatter="$(awk '/^---[[:space:]]*$/{n++; next} n==1{print} n==2{exit}' "$skill_md")"
-
   # name field
-  yaml_name="$(printf "%s" "$frontmatter" | awk -F': ' '/^name:/{print $2; exit}' | tr -d '"' | tr -d "'" | tr -d '[:space:]')"
   if [[ -z "$yaml_name" ]]; then
     err "name field missing from frontmatter"
   elif [[ "$yaml_name" != "$skill_name" ]]; then
@@ -73,21 +98,7 @@ for skill_dir in "$SKILLS_DIR"/*/; do
     err "name exceeds 64 characters"
   fi
 
-  # description field — parse only the frontmatter we already extracted (not the body)
-  desc_block="$(printf "%s\n" "$frontmatter" | awk '
-    BEGIN{in_desc=0}
-    /^description:/{
-      sub(/^description:[ \t]*/, "")
-      if ($0 ~ /^>/ || $0 ~ /^\|/) { in_desc=1; next }
-      print; exit
-    }
-    in_desc==1 {
-      if ($0 ~ /^[a-zA-Z_-]+:/) exit
-      sub(/^[ \t]+/, "")
-      printf "%s ", $0
-    }
-  ')"
-
+  # description field
   desc_len=${#desc_block}
   if [[ $desc_len -eq 0 ]]; then
     err "description field missing or empty"
@@ -105,7 +116,6 @@ for skill_dir in "$SKILLS_DIR"/*/; do
   fi
 
   # File size
-  line_count=$(wc -l < "$skill_md" | tr -d '[:space:]')
   if [[ $line_count -gt 500 ]]; then
     warn "SKILL.md is $line_count lines, consider moving detail to references/"
   else
