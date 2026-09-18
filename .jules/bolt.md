@@ -1,0 +1,3 @@
+## 2024-06-11 - [Subprocess Overhead in Bash File Parsing]
+**Learning:** Parsing text files in bash using multiple sequential pipeline subprocesses (`head`, `awk`, `tr`, `wc`) inside a loop for each file incurs massive performance overhead compared to using a single optimized `awk` process. The validate-skills.sh script was dropping ~0.6s to parse 17 small markdown files, mostly due to fork/exec overhead.
+**Action:** When extracting multiple pieces of information from files in bash loops, consolidate extraction logic into a single `awk` process and use `IFS=$'\x1c' read -r var1 var2 ... < <(awk ...)` to securely parse outputs back into bash variables, minimizing subshells.
