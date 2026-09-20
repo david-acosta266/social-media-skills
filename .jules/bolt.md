@@ -1,0 +1,3 @@
+## 2025-02-17 - Bash subshells vs built-ins in validation scripts
+**Learning:** The validation script parsed YAML frontmatter using `awk`, `head`, and `tr` pipelines inside a loop over skills files. This spawned upwards of 10 subprocesses per file iteration, creating a significant bottleneck. Converting the logic to use pure Bash line-by-line file reading and parameter expansion was ~3x faster.
+**Action:** When performing simple string matching or token extraction within a loop over many files in a bash script, always prefer pure bash parameter expansion (`${var#prefix}`, `${var//search/replace}`) and built-ins (`while read -r`) over invoking external tools like `awk`, `sed`, or `tr`.
