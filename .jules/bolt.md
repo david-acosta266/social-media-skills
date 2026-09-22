@@ -1,0 +1,3 @@
+## 2024-05-24 - Bash Process Substitution with AWK
+**Learning:** Shell scripts (like `validate-skills.sh`) running loops over many files can suffer massive overhead if they fork multiple sub-processes (awk, sed, tr, wc) per iteration. Combining text processing into a single AWK script and using process substitution with a safe IFS (`IFS=$'\x1c' read -r var1 var2 < <(awk ... )`) eliminates this bottleneck safely.
+**Action:** Always check inner loops of validation/bash scripts for repeated process spawning (e.g. `$(basename $f)`) and replace them with single-pass parsers or bash built-in string manipulations.
