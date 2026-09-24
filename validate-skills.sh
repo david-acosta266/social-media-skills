@@ -56,11 +56,48 @@ for skill_dir in "$SKILLS_DIR"/*/; do
     continue
   fi
 
-  # Extract frontmatter (between the first two --- delimiters)
-  frontmatter="$(awk '/^---[[:space:]]*$/{n++; next} n==1{print} n==2{exit}' "$skill_md")"
+  # Extract frontmatter and fields in a single awk pass
+  {
+    IFS=$'\x1c' read -r yaml_name desc_block
+  } < <(awk '
+    BEGIN {
+      n = 0; in_desc = 0; yaml_name = ""; desc_block = ""
+    }
+    /^---[[:space:]]*$/ {
+      n++
+      if (n == 2) exit
+      next
+    }
+    n == 1 {
+      if (in_desc == 1) {
+        if ($0 ~ /^[a-zA-Z_-]+:/) {
+          in_desc = 0
+        } else {
+          sub(/^[ \t]+/, "")
+          desc_block = desc_block $0 " "
+          next
+        }
+      }
 
-  # name field
-  yaml_name="$(printf "%s" "$frontmatter" | awk -F': ' '/^name:/{print $2; exit}' | tr -d '"' | tr -d "'" | tr -d '[:space:]')"
+      if ($0 ~ /^name:/) {
+        sub(/^name:[ \t]*/, "")
+        yaml_name = $0
+        gsub(/["\047 \t\r\n]+/, "", yaml_name)
+      } else if ($0 ~ /^description:/) {
+        sub(/^description:[ \t]*/, "")
+        if ($0 ~ /^[>|]/) {
+          in_desc = 1
+        } else {
+          desc_block = $0
+        }
+      }
+    }
+    END {
+      sub(/[ \t]+$/, "", desc_block)
+      printf "%s\x1c%s\n", yaml_name, desc_block
+    }
+  ' "$skill_md")
+
   if [[ -z "$yaml_name" ]]; then
     err "name field missing from frontmatter"
   elif [[ "$yaml_name" != "$skill_name" ]]; then
@@ -72,21 +109,6 @@ for skill_dir in "$SKILLS_DIR"/*/; do
   if [[ ${#yaml_name} -gt 64 ]]; then
     err "name exceeds 64 characters"
   fi
-
-  # description field — parse only the frontmatter we already extracted (not the body)
-  desc_block="$(printf "%s\n" "$frontmatter" | awk '
-    BEGIN{in_desc=0}
-    /^description:/{
-      sub(/^description:[ \t]*/, "")
-      if ($0 ~ /^>/ || $0 ~ /^\|/) { in_desc=1; next }
-      print; exit
-    }
-    in_desc==1 {
-      if ($0 ~ /^[a-zA-Z_-]+:/) exit
-      sub(/^[ \t]+/, "")
-      printf "%s ", $0
-    }
-  ')"
 
   desc_len=${#desc_block}
   if [[ $desc_len -eq 0 ]]; then
