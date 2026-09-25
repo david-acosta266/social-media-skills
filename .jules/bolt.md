@@ -1,0 +1,3 @@
+## 2024-05-18 - Avoid repeated subprocesses in tight bash loops
+**Learning:** The `validate-skills.sh` script suffered a measurable performance hit because it spawned multiple subprocesses (`head`, `awk`, `tr`, `wc`) inside a loop for every validated file. Spawning processes in bash is expensive compared to the execution of the process itself when the task is lightweight.
+**Action:** When validating or parsing files in bash loops, consolidate parsing logic into a single `awk` pass or fewer subprocesses, then use process substitution `< <(...)` and an unprintable separator (like `IFS=$'\x1c'`) to safely read multiple values into variables at once.
