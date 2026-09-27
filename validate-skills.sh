@@ -56,11 +56,42 @@ for skill_dir in "$SKILLS_DIR"/*/; do
     continue
   fi
 
-  # Extract frontmatter (between the first two --- delimiters)
-  frontmatter="$(awk '/^---[[:space:]]*$/{n++; next} n==1{print} n==2{exit}' "$skill_md")"
+  # Extract frontmatter and description in one pass
+  yaml_name=""
+  desc_block=""
+  in_desc=0
+  n=0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" =~ ^---[[:space:]]*$ ]]; then
+      ((n++))
+      [[ $n -eq 2 ]] && break
+      continue
+    fi
+    if [[ $n -eq 1 ]]; then
+      if [[ "$line" == name:* ]]; then
+        yaml_name="${line#name: }"
+        yaml_name="${yaml_name//[\"\'[:space:]]/}"
+      elif [[ "$line" == description:* ]]; then
+        line="${line#description:}"
+        line="${line#"${line%%[![:space:]]*}"}" # trim leading space
+        if [[ "$line" == ">"* || "$line" == "|"* ]]; then
+          in_desc=1
+          continue
+        fi
+        desc_block="$line"
+        in_desc=2 # Done with description
+      elif [[ $in_desc -eq 1 ]]; then
+        if [[ "$line" =~ ^[a-zA-Z_-]+: ]]; then
+          in_desc=2
+        else
+          line="${line#"${line%%[![:space:]]*}"}" # trim leading space
+          desc_block="${desc_block}${line} "
+        fi
+      fi
+    fi
+  done < "$skill_md"
 
   # name field
-  yaml_name="$(printf "%s" "$frontmatter" | awk -F': ' '/^name:/{print $2; exit}' | tr -d '"' | tr -d "'" | tr -d '[:space:]')"
   if [[ -z "$yaml_name" ]]; then
     err "name field missing from frontmatter"
   elif [[ "$yaml_name" != "$skill_name" ]]; then
@@ -72,21 +103,6 @@ for skill_dir in "$SKILLS_DIR"/*/; do
   if [[ ${#yaml_name} -gt 64 ]]; then
     err "name exceeds 64 characters"
   fi
-
-  # description field — parse only the frontmatter we already extracted (not the body)
-  desc_block="$(printf "%s\n" "$frontmatter" | awk '
-    BEGIN{in_desc=0}
-    /^description:/{
-      sub(/^description:[ \t]*/, "")
-      if ($0 ~ /^>/ || $0 ~ /^\|/) { in_desc=1; next }
-      print; exit
-    }
-    in_desc==1 {
-      if ($0 ~ /^[a-zA-Z_-]+:/) exit
-      sub(/^[ \t]+/, "")
-      printf "%s ", $0
-    }
-  ')"
 
   desc_len=${#desc_block}
   if [[ $desc_len -eq 0 ]]; then
@@ -105,7 +121,8 @@ for skill_dir in "$SKILLS_DIR"/*/; do
   fi
 
   # File size
-  line_count=$(wc -l < "$skill_md" | tr -d '[:space:]')
+  line_count=$(wc -l < "$skill_md")
+  line_count=$((line_count))
   if [[ $line_count -gt 500 ]]; then
     warn "SKILL.md is $line_count lines, consider moving detail to references/"
   else
