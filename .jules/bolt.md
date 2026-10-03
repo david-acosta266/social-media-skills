@@ -1,0 +1,3 @@
+## 2026-10-03 - Bash subprocess overhead in tight loops
+**Learning:** In bash validation scripts like `validate-skills.sh`, spawning multiple external commands (`head`, `awk`, `tr`, `wc`) inside a loop for each item (like skill directories) introduces massive fork/exec overhead. This causes execution time to scale linearly and poorly with the number of items.
+**Action:** Consolidate text parsing and counting into a single `awk` pass inside the loop. Use process substitution with `read -r` and a safe delimiter (like `\034`) to safely inject the parsed variables back into the bash context, cutting overhead by >50-90%.
