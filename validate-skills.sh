@@ -60,7 +60,7 @@ for skill_dir in "$SKILLS_DIR"/*/; do
   frontmatter="$(awk '/^---[[:space:]]*$/{n++; next} n==1{print} n==2{exit}' "$skill_md")"
 
   # name field
-  yaml_name="$(printf "%s" "$frontmatter" | awk -F': ' '/^name:/{print $2; exit}' | tr -d '"' | tr -d "'" | tr -d '[:space:]')"
+  yaml_name="$(printf "%s" "$frontmatter" | awk -F': ' '/^name:/{gsub(/["'\'' \t]/,"",$2); print $2; exit}')"
   if [[ -z "$yaml_name" ]]; then
     err "name field missing from frontmatter"
   elif [[ "$yaml_name" != "$skill_name" ]]; then
@@ -105,7 +105,8 @@ for skill_dir in "$SKILLS_DIR"/*/; do
   fi
 
   # File size
-  line_count=$(wc -l < "$skill_md" | tr -d '[:space:]')
+  line_count=$(wc -l < "$skill_md")
+  line_count=$((line_count))
   if [[ $line_count -gt 500 ]]; then
     warn "SKILL.md is $line_count lines, consider moving detail to references/"
   else
