@@ -1,0 +1,3 @@
+## 2024-05-15 - Validate Skills Script Optimization
+**Learning:** The bash script `validate-skills.sh` iterates through the `skills/` directory and performs checks on each `SKILL.md` file. It relies on invoking external processes like `awk`, `head`, `wc`, and `tr` multiple times *per file* (e.g., inside the loop). In a bash script, spawning many processes inside a loop is a significant performance bottleneck (process creation overhead).
+**Action:** Optimize `validate-skills.sh` by minimizing the number of external processes spawned inside the loop. Consolidate operations, use bash built-ins where possible, or perform a single `awk` pass per file to extract all necessary information at once.
