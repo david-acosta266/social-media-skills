@@ -1,0 +1,3 @@
+## 2026-10-11 - Consolidating process spawns in bash loops
+**Learning:** Shell scripts that iterate through a large number of files (like `validate-skills.sh` checking multiple `SKILL.md` files) can experience significant performance overhead when spawning multiple sub-processes (e.g., `head`, `awk`, `tr`, `wc`) inside the loop. In bash, process spawning (`fork` and `exec`) is expensive.
+**Action:** When performing complex text processing or multi-line parsing in a bash loop, consolidate the operations into a single `awk` pass per file. Use process substitution (`read -r var1 var2 < <(awk '...' file)`) with a safe delimiter (like `\034`) to extract multiple values efficiently. Ensure temporary files are removed before proceeding with commit steps.
