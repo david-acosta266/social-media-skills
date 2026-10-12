@@ -1,0 +1,3 @@
+## 2026-10-12 - Optimize bash script loop with a single awk process
+**Learning:** In bash scripts, spawning multiple subprocesses (like head, awk, tr, wc) inside loops can cause significant performance overhead. For text processing tasks on files, it is much faster to consolidate these operations into a single awk pass per file using safe delimiters (like octal escaped characters) to pipe the output back to bash variables.
+**Action:** Always look for opportunities to replace multiple sub-processes inside loops with a single robust text processing pass (like an awk block). Read the output safely into variables using `IFS=$'\034\n' read -r -d '' var1 var2 ... < <(awk ...)`.
