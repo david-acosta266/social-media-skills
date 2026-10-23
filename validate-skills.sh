@@ -49,18 +49,54 @@ for skill_dir in "$SKILLS_DIR"/*/; do
     ok "folder name valid"
   fi
 
+  # Single awk pass to extract frontmatter data and file size
+  stats="$(awk '
+    BEGIN { name=""; desc=""; in_desc=0; n=0; first=""; multi=0 }
+    NR==1 { first=$0 }
+    /^---[[:space:]]*$/ {
+      n++
+      if (n==2) { in_desc=0 }
+      next
+    }
+    n==1 {
+      if ($0 ~ /^name:/ && name=="") {
+        name=$0
+        sub(/^name:[ \t]*/, "", name)
+        gsub(/["\047 \t\r\n]/, "", name)
+      }
+      else if ($0 ~ /^description:/) {
+        d=$0
+        sub(/^description:[ \t]*/, "", d)
+        if (d ~ /^>/ || d ~ /^\|/) { in_desc=1; multi=1 }
+        else { desc=d }
+      }
+      else if (in_desc) {
+        if ($0 ~ /^[a-zA-Z_-]+:/) { in_desc=0 }
+        else {
+          d=$0
+          sub(/^[ \t]+/, "", d)
+          if (desc == "") desc = d
+          else desc = desc " " d
+        }
+      }
+    }
+    END {
+      if (multi) {
+        desc = desc " "
+      }
+      printf "%s\034%s\034%s\034%d\n", first, name, desc, NR
+    }
+  ' "$skill_md")"
+
+  IFS=$'\034' read -r first_line yaml_name desc_block line_count <<< "$stats"
+
   # Frontmatter present
-  first_line="$(head -n1 "$skill_md")"
   if [[ "$first_line" != "---" ]]; then
     err "SKILL.md must start with YAML frontmatter (---)"
     continue
   fi
 
-  # Extract frontmatter (between the first two --- delimiters)
-  frontmatter="$(awk '/^---[[:space:]]*$/{n++; next} n==1{print} n==2{exit}' "$skill_md")"
-
   # name field
-  yaml_name="$(printf "%s" "$frontmatter" | awk -F': ' '/^name:/{print $2; exit}' | tr -d '"' | tr -d "'" | tr -d '[:space:]')"
   if [[ -z "$yaml_name" ]]; then
     err "name field missing from frontmatter"
   elif [[ "$yaml_name" != "$skill_name" ]]; then
@@ -73,21 +109,7 @@ for skill_dir in "$SKILLS_DIR"/*/; do
     err "name exceeds 64 characters"
   fi
 
-  # description field — parse only the frontmatter we already extracted (not the body)
-  desc_block="$(printf "%s\n" "$frontmatter" | awk '
-    BEGIN{in_desc=0}
-    /^description:/{
-      sub(/^description:[ \t]*/, "")
-      if ($0 ~ /^>/ || $0 ~ /^\|/) { in_desc=1; next }
-      print; exit
-    }
-    in_desc==1 {
-      if ($0 ~ /^[a-zA-Z_-]+:/) exit
-      sub(/^[ \t]+/, "")
-      printf "%s ", $0
-    }
-  ')"
-
+  # description field
   desc_len=${#desc_block}
   if [[ $desc_len -eq 0 ]]; then
     err "description field missing or empty"
@@ -105,7 +127,6 @@ for skill_dir in "$SKILLS_DIR"/*/; do
   fi
 
   # File size
-  line_count=$(wc -l < "$skill_md" | tr -d '[:space:]')
   if [[ $line_count -gt 500 ]]; then
     warn "SKILL.md is $line_count lines, consider moving detail to references/"
   else
