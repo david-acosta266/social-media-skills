@@ -1,0 +1,3 @@
+## 2026-10-25 - Consolidating bash subprocesses inside loops
+**Learning:** I found that when reading and parsing metadata for multiple files in a bash loop, invoking tools like `awk`, `head`, `sed`, and `wc` independently inside the loop spawns numerous subprocesses. This accumulates massive execution overhead, easily quadrupling execution times even in small datasets.
+**Action:** Always refactor multiple text-processing subprocesses in loops into a single optimized `awk` script pass. Use `IFS=$'\034' read -r ... < <(awk ...)` via process substitution to pass parsed results safely back to native bash variables without extra process forks.
