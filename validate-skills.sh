@@ -49,22 +49,67 @@ for skill_dir in "$SKILLS_DIR"/*/; do
     ok "folder name valid"
   fi
 
+  # Single awk pass to extract frontmatter data and line count efficiently
+  IFS=$'\034' read -r first_is_dashes yaml_name desc_block line_count < <(
+    awk '
+      BEGIN {
+        n = 0
+        in_desc = 0
+        yaml_name = ""
+        desc = ""
+        first_is_dashes = 0
+      }
+      NR == 1 {
+        if ($0 ~ /^---[ \t]*$/) {
+          first_is_dashes = 1
+        }
+      }
+      /^---[ \t]*$/ {
+        n++
+        next
+      }
+      n == 1 {
+        if ($0 ~ /^name:/) {
+          yaml_name = $0
+          sub(/^name:[ \t]*/, "", yaml_name)
+          gsub(/["\047 \t\r\n]/, "", yaml_name)
+        } else if ($0 ~ /^description:/) {
+          in_desc = 1
+          temp = $0
+          sub(/^description:[ \t]*/, "", temp)
+          if (temp !~ /^>/ && temp !~ /^\|/) {
+            desc = temp
+            in_desc = 0
+          }
+        } else if (in_desc == 1) {
+          if ($0 ~ /^[a-zA-Z_-]+:/) {
+            in_desc = 0
+          } else {
+            temp = $0
+            sub(/^[ \t]+/, "", temp)
+            sub(/[\r\n]+$/, "", temp)
+            if (desc != "") desc = desc " " temp
+            else desc = temp
+          }
+        }
+      }
+      END {
+        printf "%d\034%s\034%s\034%d\n", first_is_dashes, yaml_name, desc, NR
+      }
+    ' "$skill_md"
+  )
+
   # Frontmatter present
-  first_line="$(head -n1 "$skill_md")"
-  if [[ "$first_line" != "---" ]]; then
+  if [[ "$first_is_dashes" != "1" ]]; then
     err "SKILL.md must start with YAML frontmatter (---)"
     continue
   fi
 
-  # Extract frontmatter (between the first two --- delimiters)
-  frontmatter="$(awk '/^---[[:space:]]*$/{n++; next} n==1{print} n==2{exit}' "$skill_md")"
-
   # name field
-  yaml_name="$(printf "%s" "$frontmatter" | awk -F': ' '/^name:/{print $2; exit}' | tr -d '"' | tr -d "'" | tr -d '[:space:]')"
   if [[ -z "$yaml_name" ]]; then
     err "name field missing from frontmatter"
   elif [[ "$yaml_name" != "$skill_name" ]]; then
-    err "name '$yaml_name' does not match folder '$skill_name'"
+    err "name '"$yaml_name"' does not match folder '"$skill_name"'"
   else
     ok "name matches folder"
   fi
@@ -73,21 +118,7 @@ for skill_dir in "$SKILLS_DIR"/*/; do
     err "name exceeds 64 characters"
   fi
 
-  # description field — parse only the frontmatter we already extracted (not the body)
-  desc_block="$(printf "%s\n" "$frontmatter" | awk '
-    BEGIN{in_desc=0}
-    /^description:/{
-      sub(/^description:[ \t]*/, "")
-      if ($0 ~ /^>/ || $0 ~ /^\|/) { in_desc=1; next }
-      print; exit
-    }
-    in_desc==1 {
-      if ($0 ~ /^[a-zA-Z_-]+:/) exit
-      sub(/^[ \t]+/, "")
-      printf "%s ", $0
-    }
-  ')"
-
+  # description field
   desc_len=${#desc_block}
   if [[ $desc_len -eq 0 ]]; then
     err "description field missing or empty"
@@ -101,11 +132,10 @@ for skill_dir in "$SKILLS_DIR"/*/; do
   if [[ "$desc_block" == *"when"* || "$desc_block" == *"Use"* || "$desc_block" == *"use"* ]]; then
     ok "description has trigger phrasing"
   else
-    warn "description should include 'use' or 'when' trigger phrasing"
+    warn "description should include '"use"' or '"when"' trigger phrasing"
   fi
 
   # File size
-  line_count=$(wc -l < "$skill_md" | tr -d '[:space:]')
   if [[ $line_count -gt 500 ]]; then
     warn "SKILL.md is $line_count lines, consider moving detail to references/"
   else
